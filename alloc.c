@@ -1,61 +1,70 @@
 #include "alloc.h"
 
-Controller controller;
-Memory* new;
+Manager manager; // 메모리 관리자 
+Memory* new; // 메모리 리스트 관리용 포인터
 
+// mmap 플래그 값
 const int flag1 = PROT_READ | PROT_WRITE;
 const int flag2 = MAP_ANONYMOUS | MAP_PRIVATE;
 
-void print_alloc()
+int init_alloc() // 메모리 관리자 초기화
 {
-	Memory *cur;
-	cur = controller.alloc_head;
-
-	while(cur!=NULL){
-		printf("alloc>> offset:%d size:%d\n", cur->offset,cur->size);
-		cur = cur->next;
-	}
-}
-void print_chunk()
-{
-	Memory *cur;
-	cur = controller.chunk_head;
-
-	while(cur!=NULL){
-		printf("chunk>> offset:%d size:%d\n", cur->offset,cur->size);
-		cur = cur->next;
-	}
-	printf("\n");
-}
-int init_alloc()
-{
-	// 기본 데이터 구조 초기화
-	controller.total_size = PAGESIZE;
+	// mmap으로 page 할당
+	if((manager.page = mmap(0, PAGESIZE, flag1, flag2, -1, 0)) == MAP_FAILED) 
+		return 1;
+	manager.total_size = PAGESIZE;
 
 	// 할당 메모리 초기화
-	controller.alloc_num = 0;
-	controller.alloc_head = NULL;
-	controller.alloc_tail = NULL;
+	manager.alloc_head = NULL;
+	manager.alloc_tail = NULL;
 
 	// 할당되지 않은 메모리 초기화
-	controller.chunk_num = 1;
 	new = malloc(sizeof(Memory));
 	new->offset = 0;
 	new->size = PAGESIZE;
 	new->next = NULL;
-	controller.chunk_head = new;
-	controller.chunk_tail = new;
+	manager.chunk_head = new;
+	manager.chunk_tail = new;
 
 	// 오류코드리턴 추가 하셈
 	return 0;
 }
 
-int cleanup()
+int cleanup() // 메모리 관리자 정리
 {
+	Memory *cur, *next;
 
+	// page 반납
+	memset(manager.page, 0, PAGESIZE);
+	if(munmap(manager.page, PAGESIZE) == MAP_FAILED)
+		return 1;
+
+	// alloc list 메모리 정리
+	cur = manager.alloc_head;
+
+	while(cur != NULL)
+	{
+		next = cur->next;
+		cur = NULL;
+		free(cur);
+		cur = next;
+	}
+
+	// chunk list 메모리 정리
+	cur = manager.chunk_head;
+
+	while(cur != NULL)
+	{
+		next = cur->next;
+		cur = NULL;
+		free(cur);
+		cur = next;
+	}
+
+	return 0;
 }
 
-char* alloc(int size)
+char* alloc(int size) // 메모리 할당
 {
 	char* mem;
 	Memory* cur;
@@ -63,32 +72,29 @@ char* alloc(int size)
 	// 오류 예외 처리
 	if(size % 8 != 0)
 		return NULL;
-	if(size > controller.total_size)
+	if(size > manager.total_size)
 		return NULL;
 
-	cur = controller.chunk_head;
-
+	cur = manager.chunk_head;
 	while(cur != NULL) 
 	{
-		if(cur->size >= size) {
-			if((mem = mmap(0, size, flag1, flag2, -1, 0)) == MAP_FAILED) {
-				fprintf(stderr, "mmap error\n");
-			}
-
-			// alloc된 메모리 관리
+		if(cur->size >= size) { // 적절한 chunk를 찾으면 할당
+			mem = manager.page + cur->offset;
+			// alloc 메모리 관리
 			new = malloc(sizeof(Memory));
 			new->offset = cur->offset;
 			new->size = size;
 			new->data = mem;
 			new->next = NULL;
+			manager.total_size -= new->size;
 
-			if(controller.alloc_head == NULL) {
-				controller.alloc_head = new;
-				controller.alloc_tail = new;
+			if(manager.alloc_head == NULL) {
+				manager.alloc_head = new;
+				manager.alloc_tail = new;
 			}
 			else {
-				controller.alloc_tail->next = new;
-				controller.alloc_tail = new;
+				manager.alloc_tail->next = new;
+				manager.alloc_tail = new;
 			}
 
 			// chunk 메모리 관리
@@ -96,48 +102,47 @@ char* alloc(int size)
 			cur->size = cur->size - size;
 
 			if(cur->size == 0) { // chunk가 없으면
-				controller.chunk_head = NULL;
-				controller.chunk_tail = NULL;
+				manager.chunk_head = NULL;
+				manager.chunk_tail = NULL;
 				cur = NULL;
 				free(cur);
 			}
 
 			return mem;
 		}
-
 		cur = cur->next;
 	}
 
 	return NULL;
 }
 
-void dealloc(char* mem)
+void dealloc(char* mem) // 메모리 반납
 {
 	Memory *cur, *cur2, *prev, *prev2;
 	Memory *fore, *back, *back_prev, *fore_prev;
 
-	cur = controller.alloc_head;
+	cur = manager.alloc_head;
 
 	while(cur != NULL) 
 	{
-		if(strcmp(cur->data, mem) == 0) {
-			munmap(mem, cur->size);
+		if(strcmp(cur->data, mem) == 0) { // 메모리를 찾으면 반납
+			memset(manager.page + cur->offset, 0, cur->size);
+			manager.total_size += cur->size;
 			fore_prev = prev2;
 
 			// alloc 메모리가 1개인 경우 리셋
-			if(controller.alloc_head->next == NULL) 
+			if(manager.alloc_head->next == NULL) 
 			{
-				controller.chunk_num = 1;
 				new = malloc(sizeof(Memory));
 				new->offset = 0;
 				new->size = PAGESIZE;
 				new->next = NULL;
-				controller.chunk_head = new;
-				controller.chunk_tail = new;
+				manager.chunk_head = new;
+				manager.chunk_tail = new;
 			}
 			else // 그 외의 경우 합병 케이스 탐색
 			{
-				cur2 = controller.chunk_head;
+				cur2 = manager.chunk_head;
 				fore = back = NULL;
 
 				// 합병 케이스 탐색
@@ -160,21 +165,19 @@ void dealloc(char* mem)
 					new->size = cur->size;
 					new->next = NULL;
 
-					if(controller.chunk_head == NULL) {
-						controller.chunk_head = new;
-						controller.chunk_tail = new;
+					if(manager.chunk_head == NULL) {
+						manager.chunk_head = new;
+						manager.chunk_tail = new;
 					}
 					else {
-						controller.chunk_tail->next = new;
-						new = controller.chunk_tail;
+						manager.chunk_tail->next = new;
+						new = manager.chunk_tail;
 					}
 				}
 				else if(fore != NULL && back == NULL) { // 앞의 chunk와 합병인 경우
-					//printf("fore merger\n");
 					fore->size += cur->size; 
 				}
 				else if(fore == NULL && back != NULL) { // 뒤의 chunk와 합병인 경우
-					//printf("back merge\n");
 					back->size += cur->size; 
 					back->offset -= cur->size;
 				}
@@ -182,12 +185,12 @@ void dealloc(char* mem)
 					fore->size += cur->size + back->size; 
 
 					// back chunk 리스트에서 제거
-					if(back == controller.chunk_head) {
-						controller.chunk_head = back->next;
+					if(back == manager.chunk_head) {
+						manager.chunk_head = back->next;
 					}
-					else if(back == controller.chunk_tail)  {
-						controller.chunk_tail = back_prev;
-						controller.chunk_tail->next = NULL;
+					else if(back == manager.chunk_tail)  {
+						manager.chunk_tail = back_prev;
+						manager.chunk_tail->next = NULL;
 					}
 					else {
 						back_prev->next = back->next;
@@ -199,17 +202,14 @@ void dealloc(char* mem)
 			}
 
 			// cur을 alloc  리스트에서 제거
-			if(cur == controller.alloc_head){
-				//printf("head\n");
-				controller.alloc_head = cur->next;
+			if(cur == manager.alloc_head){
+				manager.alloc_head = cur->next;
 			}
-			else if(cur == controller.alloc_tail) {
-				//printf("tail\n");
-				controller.alloc_tail = fore_prev;
-				controller.alloc_tail->next = NULL;
+			else if(cur == manager.alloc_tail) {
+				manager.alloc_tail = fore_prev;
+				manager.alloc_tail->next = NULL;
 			}
 			else{ 
-				//printf("else\n");
 				fore_prev->next = cur->next;
 			}
 			cur = NULL;
@@ -222,3 +222,29 @@ void dealloc(char* mem)
 		cur = cur->next;
 	}
 }
+
+void print_alloc() // 디버깅용 함수(alloc 리스트 출력)
+{
+	Memory *cur;
+	cur = manager.alloc_head;
+
+	while(cur!=NULL){
+		printf("alloc>> offset:%d size:%d\n", cur->offset,cur->size);
+		cur = cur->next;
+	}
+
+}
+
+void print_chunk() // 디버깅용 함수(chunk 리스트 출력)
+{
+	Memory *cur;
+	cur = manager.chunk_head;
+
+	while(cur!=NULL){
+		printf("chunk>> offset:%d size:%d\n", cur->offset,cur->size);
+		cur = cur->next;
+	}
+	printf("\n");
+
+}
+

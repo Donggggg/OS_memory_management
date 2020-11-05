@@ -36,7 +36,7 @@ int cleanup() // 메모리 관리자 정리
 
 	// page 반납
 	memset(manager.page, 0, PAGESIZE);
-	if(munmap(manager.page, PAGESIZE) == MAP_FAILED)
+	if(munmap(manager.page, PAGESIZE) == -1)
 		return 1;
 
 	// alloc list 메모리 정리

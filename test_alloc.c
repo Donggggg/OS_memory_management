@@ -8,10 +8,12 @@
 
 int main()
 {
+	system("ps aux | grep ./a.out");	
 	//mmap to get page
 	if(init_alloc())
 		return 1;	//mmap failed
 
+	system("ps aux | grep ./a.out");	
 	char *str = alloc(512);
 	char *str2 = alloc(512);
 
@@ -72,7 +74,7 @@ int main()
 	strA[1023] = strB[1023] = strC[1023] = strD[1023] = '\0';
 
 	if(strcmp(stringA, strA) == 0 && strcmp(stringB, strB) == 0 && strcmp(stringC, strC) == 0 && strcmp(stringD, strD) == 0)
-	  printf("Test 1 passed: allocated 4 chunks of 1KB each\n");
+	  printf("Test 1 passed: allocated 4 frees of 1KB each\n");
 	else
 	  printf("Test 1 failed: A: %d, B: %d, C: %d, D: %d\n", strcmp(stringA, strA), strcmp(stringB, strB), strcmp(stringC, strC), strcmp(stringD, strD));
 
@@ -153,8 +155,10 @@ int main()
 		printf("Test5 failed\n");
 	///////////////////////////
 
-	
+	system("ps aux | grep ./a.out");	
 	if(cleanup())
 		return 1;	//munmap failed
+	system("ps aux | grep ./a.out");	
+	system("ps aux | grep ./a.out");	
 	return 0;
 }

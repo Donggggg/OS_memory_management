@@ -140,8 +140,5 @@ int main()
 
 
 	cleanup();
-		print_alloc();
-		print_free();
-		printf("\n");
 	printf("All tests complete\n");
 }

@@ -37,7 +37,7 @@ typedef struct _memory_page {
 
 typedef struct memory_manager {
 	int page_num;
-	Page pages[PAGESIZE];
+	Page pages[NODENUM];
 } Manager;
 
 // function declarations to support

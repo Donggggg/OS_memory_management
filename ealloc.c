@@ -154,7 +154,7 @@ void dealloc(char* mem)
 		cur = manager.pages[pageNum].alloc_head;
 		while(cur != NULL) 
 		{
-			if(strcmp(cur->data, mem) == 0) { // 메모리를 찾으면 반납
+			if(cur->data ==  mem) { // 메모리를 찾으면 반납
 				//memset(manager.page + cur->offset, 0, cur->size);
 				manager.pages[pageNum].total_size += cur->size;
 				fore_prev = prev2;

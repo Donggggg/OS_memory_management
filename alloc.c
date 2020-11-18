@@ -7,16 +7,16 @@ Memory* new; // 메모리 리스트 관리용 포인터
 const int flag1 = PROT_READ | PROT_WRITE;
 const int flag2 = MAP_ANONYMOUS | MAP_PRIVATE;
 
-int get_memory_pool(int where)
+int get_memory_pool(int where) // 할당가능한 memory pool의 번호를 리턴
 {
-	if(where == ALLOC) {
+	if(where == ALLOC) { // alloc list에서 찾음
 		for(int i = 0; i < NODENUM; i++)
 			if(manager.alloc_used_list[i] == UNUSED) {
 				manager.alloc_used_list[i] = USED;
 				return i;
 			}
 	}
-	else if(where == FREE) {
+	else if(where == FREE) { // free list에서 찾음
 		for(int i = 0; i < NODENUM; i++)
 			if(manager.free_used_list[i] == UNUSED) {
 				manager.free_used_list[i] = USED;
@@ -62,13 +62,12 @@ int cleanup() // 메모리 관리자 정리
 	Memory *cur, *next;
 
 	// page 반납
-	memset(manager.page, 0, PAGESIZE);
+	//memset(manager.page, 0, PAGESIZE);
 	if(munmap(manager.page, PAGESIZE) == -1)
 		return 1;
 
 	// alloc list 메모리 정리
 	cur = manager.alloc_head;
-
 	while(cur != NULL)
 	{
 		manager.alloc_used_list[cur->pool] = UNUSED;
@@ -79,7 +78,6 @@ int cleanup() // 메모리 관리자 정리
 
 	// free list 메모리 정리
 	cur = manager.free_head;
-
 	while(cur != NULL)
 	{
 		manager.free_used_list[cur->pool] = UNUSED;
@@ -97,7 +95,7 @@ char* alloc(int size) // 메모리 할당
 	Memory* cur;
 
 	// 오류 예외 처리
-	if(size % 8 != 0)
+	if(size % MINALLOC != 0)
 		return NULL;
 	if(size > manager.total_size)
 		return NULL;
@@ -151,11 +149,10 @@ void dealloc(char* mem) // 메모리 반납
 	Memory *fore, *back, *back_prev, *fore_prev;
 
 	cur = manager.alloc_head;
-
 	while(cur != NULL) 
 	{
 		if(strcmp(cur->data, mem) == 0) { // 메모리를 찾으면 반납
-			memset(manager.page + cur->offset, 0, cur->size);
+			//memset(manager.page + cur->offset, 0, cur->size);
 			manager.total_size += cur->size;
 			fore_prev = prev2;
 

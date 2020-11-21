@@ -8,17 +8,12 @@
 
 int main()
 {
-	printf("What the VSZ is going on?\n");
-	system("ps aux | grep ./a.out");	
-	system("ps aux | grep ./a.out");	
 	//mmap to get page
 	if(init_alloc())
 		return 1;	//mmap failed
 
-	system("ps aux | grep ./a.out");	
 	char *str = alloc(512);
 	char *str2 = alloc(512);
-	system("ps aux | grep ./a.out");	
 
 	if(str == NULL || str2 == NULL)
 	{
@@ -32,11 +27,8 @@ int main()
 	else
 	  printf("Hello, world! test passed\n");
 	
-	system("ps aux | grep ./a.out");	
 	dealloc(str);
-	system("ps aux | grep ./a.out");	
 	dealloc(str2);
-	system("ps aux | grep ./a.out");	
 
 	printf("Elementary tests passed\n");
 	
@@ -160,10 +152,7 @@ int main()
 		printf("Test5 failed\n");
 	///////////////////////////
 
-	system("ps aux | grep ./a.out");	
 	if(cleanup())
 		return 1;	//munmap failed
-//	system("ps aux | grep ./a.out");	
-	system("ps aux | grep ./a.out");	
 	return 0;
 }
